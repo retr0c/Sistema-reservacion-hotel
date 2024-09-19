@@ -1,10 +1,12 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Clase de Usuario
 class Usuario:
-    def __init__(self, nombre, correo_electronico):
+    def __init__(self, nombre, correo_electronico, contraseña, es_admin=False):
         self.nombre = nombre
         self.correo_electronico = correo_electronico
+        self.contraseña = contraseña
+        self.es_admin = es_admin
 
     def enviar_notificacion(self, mensaje):
         print(f"Enviando notificación a {self.correo_electronico}: {mensaje}")
@@ -67,6 +69,7 @@ class Hotel:
         ]
         self.reservas = {}
         self.contador_reservas = 1
+        self.usuarios = [Usuario('admin', 'admin@hotel.com', 'admin123', es_admin=True)]
 
     def mostrar_habitaciones(self):
         print("\nHabitaciones disponibles en el hotel:")
@@ -81,7 +84,7 @@ class Hotel:
                 return habitacion
         return None
 
-    def realizar_reserva(self):
+    def realizar_reserva(self, usuario):
         self.mostrar_habitaciones()
 
         id_habitacion = int(input("\nElige el ID de la habitación que deseas reservar (o 0 para salir al menú principal): "))
@@ -91,11 +94,6 @@ class Hotel:
         habitacion = self.obtener_habitacion_por_id(id_habitacion)
 
         if habitacion and habitacion.consultar_disponibilidad():
-            nombre = input("Ingresa tu nombre: ")
-            correo = input("Ingresa tu correo electrónico: ")
-            usuario = Usuario(nombre, correo)
-            telefono = input("Ingresa tu teléfono: ")
-
             fecha_entrada = datetime.strptime(input("Ingresa la fecha de entrada (YYYY-MM-DD): "), '%Y-%m-%d')
             fecha_salida = datetime.strptime(input("Ingresa la fecha de salida (YYYY-MM-DD): "), '%Y-%m-%d')
 
@@ -113,16 +111,37 @@ class Hotel:
         else:
             print("La habitación no está disponible o no existe.")
 
-    def cancelar_reserva(self):
+    def cancelar_reserva(self, usuario):
         numero_reserva = int(input("Ingresa el número de la reserva que deseas cancelar (o 0 para salir al menú principal): "))
         if numero_reserva == 0:
             return
 
         if numero_reserva in self.reservas:
             reserva = self.reservas[numero_reserva]
-            reserva.habitacion.actualizar_estado('Disponible')
-            del self.reservas[numero_reserva]
-            print("Reserva cancelada con éxito.")
+            if reserva.usuario.correo_electronico == usuario.correo_electronico or usuario.es_admin:
+                reserva.habitacion.actualizar_estado('Disponible')
+                del self.reservas[numero_reserva]
+                print("Reserva cancelada con éxito.")
+            else:
+                print("No tienes permiso para cancelar esta reserva.")
+        else:
+            print("Número de reserva no encontrado.")
+
+    def modificar_reserva(self, usuario):
+        numero_reserva = int(input("Ingresa el número de la reserva que deseas modificar (o 0 para salir al menú principal): "))
+        if numero_reserva == 0:
+            return
+
+        if numero_reserva in self.reservas:
+            reserva = self.reservas[numero_reserva]
+            if reserva.usuario.correo_electronico == usuario.correo_electronico or usuario.es_admin:
+                nueva_fecha_entrada = datetime.strptime(input("Ingresa la nueva fecha de entrada (YYYY-MM-DD): "), '%Y-%m-%d')
+                nueva_fecha_salida = datetime.strptime(input("Ingresa la nueva fecha de salida (YYYY-MM-DD): "), '%Y-%m-%d')
+                reserva.fecha_entrada = nueva_fecha_entrada
+                reserva.fecha_salida = nueva_fecha_salida
+                print("Reserva modificada con éxito.")
+            else:
+                print("No tienes permiso para modificar esta reserva.")
         else:
             print("Número de reserva no encontrado.")
 
@@ -150,32 +169,127 @@ class Hotel:
                       f"(ID: {reserva.habitacion.id_habitacion}) | Entrada: {reserva.fecha_entrada.strftime('%Y-%m-%d')} | "
                       f"Salida: {reserva.fecha_salida.strftime('%Y-%m-%d')}")
 
+    def registrar_usuario(self):
+        nombre = input("Ingresa tu nombre: ")
+        correo = input("Ingresa tu correo electrónico: ")
+        contraseña = input("Ingresa tu contraseña: ")
+        if any(u.correo_electronico == correo for u in self.usuarios):
+            print("Error: El usuario ya existe.")
+        else:
+            self.usuarios.append(Usuario(nombre, correo, contraseña))
+            print("Usuario registrado con éxito.")
+
+    def iniciar_sesion(self):
+        correo = input("Correo electrónico: ")
+        contraseña = input("Contraseña: ")
+        for usuario in self.usuarios:
+            if usuario.correo_electronico == correo and usuario.contraseña == contraseña:
+                print(f"Acceso concedido. Bienvenido {usuario.nombre}.")
+                return usuario
+        print("Error: Correo o contraseña incorrectos.")
+        return None
+
 # Menú principal del sistema
 def menu_principal(hotel):
     while True:
         print("\n---- Menú Principal ----")
-        print("1. Realizar reserva")
-        print("2. Cancelar reserva")
-        print("3. Cambiar precio de habitación (Administrador)")
-        print("4. Consultar historial de reservas")
-        print("5. Salir")
-
+        print("1. Registrarse")
+        print("2. Iniciar sesión")
+        print("3. Salir")
         opcion = input("Elige una opción: ")
 
-        if opcion == '1':
-            hotel.realizar_reserva()
-        elif opcion == '2':
-            hotel.cancelar_reserva()
-        elif opcion == '3':
-            hotel.cambiar_precio()
-        elif opcion == '4':
-            hotel.mostrar_historial_reservas()
-        elif opcion == '5':
-            print("Saliendo del sistema de reservas.")
-            break
-        else:
-            print("Opción no válida. Inténtalo de nuevo.")
+        if opcion == "1":
+            hotel.registrar_usuario()
 
+        elif opcion == "2":
+            usuario = hotel.iniciar_sesion()
+            if usuario:
+                if usuario.es_admin:
+                    menu_administrador(hotel, usuario)
+                else:
+                    menu_usuario(hotel, usuario)
+
+        elif opcion == "3":
+            print("Gracias por usar el sistema de gestión del hotel.")
+            break
+
+        else:
+            print("Opción inválida. Intenta de nuevo.")
+
+# Menú para el usuario administrador
+def menu_administrador(hotel, usuario):
+    while True:
+        print("\n---- Menú Administrador ----")
+        print("1. Ver habitaciones")
+        print("2. Ver historial de reservas")
+        print("3. Modificar reserva")
+        print("4. Cancelar reserva")
+        print("5. Cambiar precio de una habitación")
+        print("6. Cerrar sesión")
+        opcion = input("Elige una opción: ")
+
+        if opcion == "1":
+            hotel.mostrar_habitaciones()
+
+        elif opcion == "2":
+            hotel.mostrar_historial_reservas()
+
+        elif opcion == "3":
+            hotel.modificar_reserva(usuario)
+
+        elif opcion == "4":
+            hotel.cancelar_reserva(usuario)
+
+        elif opcion == "5":
+            hotel.cambiar_precio()
+
+        elif opcion == "6":
+            print("Sesión cerrada.")
+            break
+
+        else:
+            print("Opción inválida. Intenta de nuevo.")
+
+# Menú para el usuario estándar
+def menu_usuario(hotel, usuario):
+    while True:
+        print(f"\n---- Menú Usuario: {usuario.nombre} ----")
+        print("1. Ver habitaciones")
+        print("2. Realizar reserva")
+        print("3. Modificar reserva")
+        print("4. Cancelar reserva")
+        print("5. Ver historial de reservas")
+        print("6. Cerrar sesión")
+        opcion = input("Elige una opción: ")
+
+        if opcion == "1":
+            hotel.mostrar_habitaciones()
+
+        elif opcion == "2":
+            hotel.realizar_reserva(usuario)
+
+        elif opcion == "3":
+            hotel.modificar_reserva(usuario)
+
+        elif opcion == "4":
+            hotel.cancelar_reserva(usuario)
+
+        elif opcion == "5":
+            hotel.mostrar_historial_reservas()
+
+        elif opcion == "6":
+            print("Sesión cerrada.")
+            break
+
+        else:
+            print("Opción inválida. Intenta de nuevo.")
+
+# Ejecutar el programa
 if __name__ == "__main__":
     hotel = Hotel()
     menu_principal(hotel)
+    
+    
+#Usuario: admin@hotel.com
+#Contraseña: admin123   
+
