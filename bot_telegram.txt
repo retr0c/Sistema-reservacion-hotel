@@ -1,0 +1,80 @@
+Integración con bot de Telegram                                                                                           pip install python-telegram-bot
+from datetime import datetime
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
+
+# Claves de bot y configuración
+TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'  # Reemplaza con el token de tu bot
+
+class Usuario:
+    def _init_(self, telegram_id, nombre):
+        self.telegram_id = telegram_id
+        self.nombre = nombre
+
+class Reserva:
+    def _init_(self, numero_reserva, usuario, fecha_reserva):
+        self.numero_reserva = numero_reserva
+        self.usuario = usuario
+        self.fecha_reserva = fecha_reserva
+
+class SistemaDeReservas:
+    def _init_(self):
+        self.reservas = {}
+        self.contador_reservas = 1
+
+    def hacer_reserva(self, usuario, fecha_reserva):
+        reserva = Reserva(self.contador_reservas, usuario, fecha_reserva)
+        self.reservas[self.contador_reservas] = reserva
+        self.contador_reservas += 1
+        return f"Reserva confirmada. Número de reserva: {reserva.numero_reserva}. Fecha de reserva: {reserva.fecha_reserva.strftime('%Y-%m-%d')}."
+
+    def consultar_reserva(self, numero_reserva):
+        if numero_reserva in self.reservas:
+            reserva = self.reservas[numero_reserva]
+            return f"Reserva {reserva.numero_reserva} para el {reserva.fecha_reserva.strftime('%Y-%m-%d')}."
+        else:
+            return "Número de reserva no encontrado."
+
+# Crear instancia del sistema de reservas
+sistema = SistemaDeReservas()
+
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("¡Hola! Soy tu bot de reservas. Usa /reservar <fecha> para hacer una reserva o /consultar <numero_reserva> para consultar una reserva.")
+
+def reservar(update: Update, context: CallbackContext):
+    usuario_id = update.message.from_user.id
+    nombre_usuario = update.message.from_user.first_name
+    fecha_str = ' '.join(context.args)
+    
+    try:
+        fecha_reserva = datetime.strptime(fecha_str, '%Y-%m-%d')
+        usuario = Usuario(usuario_id, nombre_usuario)
+        respuesta = sistema.hacer_reserva(usuario, fecha_reserva)
+        update.message.reply_text(respuesta)
+    except ValueError:
+        update.message.reply_text("Formato de fecha inválido. Usa YYYY-MM-DD.")
+
+def consultar(update: Update, context: CallbackContext):
+    numero_reserva_str = ' '.join(context.args)
+    
+    try:
+        numero_reserva = int(numero_reserva_str)
+        respuesta = sistema.consultar_reserva(numero_reserva)
+        update.message.reply_text(respuesta)
+    except ValueError:
+        update.message.reply_text("Número de reserva inválido. Asegúrate de ingresar un número entero.")
+
+def main():
+    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
+    
+    dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(CommandHandler('reservar', reservar))
+    dp.add_handler(CommandHandler('consultar', consultar))
+    
+    # Empezar el bot
+    updater.start_polling()
+    updater.idle()
+
+if _name_ == '_main_':
+    main()
